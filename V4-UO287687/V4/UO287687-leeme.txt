@@ -1,0 +1,493 @@
+Méndez Murias, Miguel
+UO287687
+Simulaciones realizadas:
+    ./Simulator --daemonsProgramsFile=teachersDaemonsTest --memConfigFile=MemConfigTest1 programVerySimpleTest 100
+    ./Simulator --memConfigFile=MemConfigTest2 test2-1 10 test2-2 30 iDontExist 350
+    ./Simulator --memConfigFile=MemConfigTest2 test3-1 10 test3-2 11 test3-3 12
+    ./Simulator --memConfigFile=MemConfigTest2 test4-1 10 test4-2 11
+
+Ejercicio 1:
+    Apartado A:
+        Hecho
+    Apartado B:
+
+		case DIV_INST: 
+			if (operand2 == 0)
+				Processor_RaiseException(DIVISIONBYZERO);//V4 -Ejercicio 1 b
+			else {
+				registerAccumulator_CPU=operand1 / operand2;
+				registerPC_CPU++;
+			}
+			break;
+        // Instruction HALT
+		case HALT_INST: 
+			if(executionMode==0){
+				Processor_RaiseException(INVALIDPROCESSORMODE); //V4 -Ejercicio 1 b
+			}else{
+				Processor_ActivatePSW_Bit(POWEROFF_BIT);
+			}
+			break;
+			  
+		// Instruction OS
+		case OS_INST: // Make a operating system routine in entry point indicated by operand1
+			if(executionMode==0){
+				Processor_RaiseException(INVALIDPROCESSORMODE);//V4 -Ejercicio 1 b
+			}else{
+				// Show final part of HARDWARE message with CPU registers
+				// Show message: " (PC: registerPC_CPU, Accumulator: registerAccumulator_CPU, PSW: registerPSW_CPU [Processor_ShowPSW()]\n
+				
+				// Not all operating system code is executed in simulated processor, but really must do it... 
+				ComputerSystem_DebugMessage(130, HARDWARE,InstructionNames[operationCode],operand1,operand2,OperatingSystem_GetExecutingProcessID() ,registerPC_CPU,registerAccumulator_CPU,registerPSW_CPU,Processor_ShowPSW());
+				OperatingSystem_InterruptLogic(operand1);
+				registerPC_CPU++;
+				// Update PSW bits (ZERO_BIT, NEGATIVE_BIT, ...)
+				Processor_UpdatePSW();
+				return; // Note: message show before... for operating system messages after...
+			}
+			break;
+
+		// Instruction IRET
+		case IRET_INST: // Return from a interrupt handle manager call
+			if(executionMode==0){
+				Processor_RaiseException(INVALIDPROCESSORMODE);//V4 -Ejercicio 1 b
+			}else{
+				registerPC_CPU=Processor_CopyFromSystemStack(MAINMEMORYSIZE-1);
+				registerPSW_CPU=Processor_CopyFromSystemStack(MAINMEMORYSIZE-2);
+			}
+			break;		
+
+    Apartado C:
+        void MMU_SetCTRL (int ctrl) {
+            registerCTRL_MMU=ctrl&0x3;
+            switch (registerCTRL_MMU) {
+            case CTRLREAD:
+                    if (Processor_PSW_BitState(EXECUTION_MODE_BIT)){ // Protected mode
+                        if (registerMAR_MMU < MAINMEMORYSIZE && registerMAR_MMU >= 0) { //V4 - Ejercicio 1 c
+                            // Send to the main memory HW the physical address to write in
+                            Buses_write_AddressBus_From_To(MMU, MAINMEMORY);
+                            // Tell the main memory HW to read
+                            // registerCTRL_MMU is CTRLREAD 
+                            Buses_write_ControlBus_From_To(MMU,MAINMEMORY);
+                            // Success
+                            registerCTRL_MMU |= CTRL_SUCCESS;
+                        }
+                        else {
+                            // Fail
+                            registerCTRL_MMU |= CTRL_FAIL;
+                            Processor_RaiseException(INVALIDADDRESS);//v4 - Ejercicio 1 c
+                        }
+                    }
+                    else // Non-Protected mode
+                        if (registerMAR_MMU<registerLimit_MMU && registerMAR_MMU >= 0) { //V4 - Ejercicio 1 c
+                            // Physical address = logical address + base register
+                            registerMAR_MMU+=registerBase_MMU;
+                            // Send to the main memory HW the physical address to write in
+                            Buses_write_AddressBus_From_To(MMU,MAINMEMORY);
+                            // Tell the main memory HW to read
+                            // registerCTRL_MMU is CTRLREAD 
+                            Buses_write_ControlBus_From_To(MMU,MAINMEMORY);
+                            // Success
+                        registerCTRL_MMU |= CTRL_SUCCESS;
+                        }
+                        else {
+                            // Fail
+                            registerCTRL_MMU |= CTRL_FAIL;
+                            Processor_RaiseException(INVALIDADDRESS);//v4 - Ejercicio 1 c
+                        }
+                    break;
+            case CTRLWRITE:
+                    if (Processor_PSW_BitState(EXECUTION_MODE_BIT)) // Protected mode
+                        if (registerMAR_MMU < MAINMEMORYSIZE && registerMAR_MMU >= 0) { //V4 - Ejercicio 1 c
+                            // Send to the main memory HW the physical address to write in
+                            Buses_write_AddressBus_From_To(MMU, MAINMEMORY);
+                            // Tell the main memory HW to read
+                            // registerCTRL_MMU is CTRLWRITE 
+                            Buses_write_ControlBus_From_To(MMU,MAINMEMORY);
+                            // Success
+                        registerCTRL_MMU |= CTRL_SUCCESS;
+                        }
+                        else {
+                            // Fail
+                            registerCTRL_MMU |= CTRL_FAIL;
+                            Processor_RaiseException(INVALIDADDRESS);//v4 - Ejercicio 1 c
+                        }
+                    else   // Non-Protected mode
+                        if (registerMAR_MMU<registerLimit_MMU && registerMAR_MMU >= 0) { //V4 - Ejercicio 1 c
+                            // Physical address = logical address + base register
+                            registerMAR_MMU+=registerBase_MMU;
+                            // Send to the main memory HW the physical address to read from
+                            Buses_write_AddressBus_From_To(MMU, MAINMEMORY);
+                            // Tell the main memory HW to write
+                            // registerCTRL_MMU is CTRLWRITE 
+                            Buses_write_ControlBus_From_To(MMU,MAINMEMORY);
+                            // Success
+                        registerCTRL_MMU |= CTRL_SUCCESS;
+                        }
+                        else {
+                            // Fail
+                            registerCTRL_MMU |= CTRL_FAIL;
+                            Processor_RaiseException(INVALIDADDRESS);//v4 - Ejercicio 1 c
+                        }
+                    break;
+                default:
+                        registerCTRL_MMU |= CTRL_FAIL;
+                        Processor_RaiseException(INVALIDADDRESS);//v4 - Ejercicio 1 c
+                        break;
+            }
+            // registerCTRL_MMU return value was CTRL_SUCCESS or CTRL_FAIL
+            Buses_write_ControlBus_From_To(MMU,CPU);
+        }
+
+Ejercicio 2:
+    void OperatingSystem_HandleException() {
+        // Show message "Process [executingProcessID] has generated an exception and is terminating\n"
+        OperatingSystem_ShowTime(INTERRUPT);
+        switch (Processor_GetRegisterD())
+        {
+            case INVALIDADDRESS:
+                ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"invalid address"); //V4 - Ejercicio 2 a
+                break;
+            case INVALIDPROCESSORMODE:
+                ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"invalid processor mode"); //V4 - Ejercicio 2 a
+                break;
+            case DIVISIONBYZERO:
+                ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"division by zero"); //V4 - Ejercicio 2 a
+                break;
+            case INVALIDINSTRUCTION:
+                ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"invalid instruction"); //V4 - Ejercicio 3 b
+                break;
+            default:
+                ComputerSystem_DebugMessage(71,SYSPROC,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName);
+                break;
+        }
+        OperatingSystem_TerminateExecutingProcess();
+        OperatingSystem_PrintStatus();
+    }
+
+
+    140,Process [@R%d - %s@@] has caused an exception (@R%s@@) and is being terminated\n
+        
+Ejercicio 3:
+    Apartado A:
+        void Processor_DecodeAndExecuteInstruction() {
+            int tempAcc; // for save accumulator if necesary
+            // Decode
+            int operationCode=Processor_DecodeOperationCode(registerIR_CPU);
+            if(operationCode==NONEXISTING_INST){
+                Processor_RaiseException(INVALIDINSTRUCTION); //V4 - Ejercicio 3 a
+                return;
+            }
+            int operand1=Processor_DecodeOperand1(registerIR_CPU);
+            int operand2=Processor_DecodeOperand2(registerIR_CPU);
+            int executionMode=Processor_PSW_BitState(EXECUTION_MODE_BIT); //0=USER MODE ; !0=SUPERUSER MODE
+            Processor_DeactivatePSW_Bit(OVERFLOW_BIT);
+            ...
+        }
+    
+    Apartado B:
+        void OperatingSystem_HandleException() {
+            // Show message "Process [executingProcessID] has generated an exception and is terminating\n"
+            OperatingSystem_ShowTime(INTERRUPT);
+            switch (Processor_GetRegisterD())
+            {
+                case INVALIDADDRESS:
+                    ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"invalid address"); //V4 - Ejercicio 2 a
+                    break;
+                case INVALIDPROCESSORMODE:
+                    ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"invalid processor mode"); //V4 - Ejercicio 2 a
+                    break;
+                case DIVISIONBYZERO:
+                    ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"division by zero"); //V4 - Ejercicio 2 a
+                    break;
+                case INVALIDINSTRUCTION:
+                    ComputerSystem_DebugMessage(140,INTERRUPT,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,"invalid instruction"); //V4 - Ejercicio 3 b
+                    break;
+                default:
+                    ComputerSystem_DebugMessage(71,SYSPROC,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName);
+                    break;
+            }
+            OperatingSystem_TerminateExecutingProcess();
+            OperatingSystem_PrintStatus();
+        }
+            
+Ejercicio 4:
+    141, Process [@R%d - %s@@] has made an invalid system call (@R%d@@) and is being terminated\n
+
+    void OperatingSystem_HandleSystemCall() 	{
+        int systemCallID;
+        int selectedProcess;
+        int operand2;
+        // Register A contains the identifier of the issued system call
+        systemCallID=Processor_GetRegisterC();
+        operand2=Processor_GetRegisterD();
+        
+        switch (systemCallID) {
+            case SYSCALL_PRINTEXECPID:
+                OperatingSystem_ShowTime(INTERRUPT);
+                // Show message: "Process [executingProcessID] has the processor assigned\n"
+                ComputerSystem_DebugMessage(72,SYSPROC,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,Processor_GetRegisterA(),Processor_GetRegisterB());
+                break;
+            case SYSCALL_END:
+                // Show message: "Process [executingProcessID] has requested to terminate\n"
+                OperatingSystem_ShowTime(INTERRUPT);
+                ComputerSystem_DebugMessage(73,SYSPROC,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName);
+                OperatingSystem_TerminateExecutingProcess();
+                OperatingSystem_PrintStatus();
+                break;
+            case SYSCALL_YIELD:
+                selectedProcess=OperatingSystem_GetAndNotExtractMostPriorityReadyToRunProcess();
+                if(selectedProcess!= NOPROCESS && processTable[selectedProcess].priority==processTable[executingProcessID].priority){
+                    OperatingSystem_ShowTime(SHORTTERMSCHEDULE);
+                    ComputerSystem_DebugMessage(116, SHORTTERMSCHEDULE, executingProcessID, programList[processTable[executingProcessID].programListIndex]->executableName,
+                    selectedProcess, programList[processTable[selectedProcess].programListIndex]->executableName);
+                    selectedProcess=OperatingSystem_ShortTermScheduler();
+                    OperatingSystem_PreemptRunningProcess();
+                    OperatingSystem_Dispatch(selectedProcess);
+                    OperatingSystem_PrintStatus();
+                }
+                else{
+                    /*Se sigue manteniendo este mensaje porque en la V2 no se indica que haya que borrarlo*/
+                    OperatingSystem_ShowTime(INTERRUPT);
+                    ComputerSystem_DebugMessage(117, SHORTTERMSCHEDULE, executingProcessID, programList[processTable[executingProcessID].programListIndex]->executableName);
+                }
+                break;
+            case SYSCALL_SLEEP:
+                processTable[executingProcessID].whenToWakeUp=operand2>0?operand2+numberOfClockInterrupts+1:abs(Processor_GetAccumulator())+numberOfClockInterrupts+1;;
+                OperatingSystem_MoveToBlockedState(executingProcessID);
+                OperatingSystem_Dispatch(OperatingSystem_ShortTermScheduler());
+                OperatingSystem_PrintStatus();
+                break;
+            default:
+                OperatingSystem_ShowTime(INTERRUPT);
+                ComputerSystem_DebugMessage(141,INTERRUPT,executingProcessID, programList[processTable[executingProcessID].programListIndex]->executableName,systemCallID); //V4 - Ejercicio 4 a
+                OperatingSystem_TerminateExecutingProcess();//V4 - Ejercicio 4 b
+                OperatingSystem_PrintStatus();//V4 - Ejercicio 4 c
+                break;
+        }
+    }
+Ejercicio 5:
+    Apartado A:
+        Hecho
+    Apartado B:
+        // Initialization of the interrupt vector table of the processor
+        Processor_InitializeInterruptVectorTable(OS_address_base+2);
+        numberOfPartitions=OperatingSystem_InitializePartitionTable(); //V4 Ejercicio 5 b	
+        // Include in program list all user or system daemon processes
+        OperatingSystem_PrepareDaemons(programsFromFileIndex);
+        // Create all user processes from the information given in the command line
+        ComputerSystem_FillInArrivalTimeQueue(); //V3 Ejercicio 1 c      
+        OperatingSystem_PrintStatus();//V3 Ejercicio 1 d 
+        if(OperatingSystem_LongTermScheduler()==0){
+            // Simulation must finish, telling sipID to finish
+            OperatingSystem_ReadyToShutdown();
+            if (executingProcessID==sipID && numberOfProgramsInArrivalTimeQueue==0) {
+                // finishing sipID, change PC to address of OS HALT instruction
+                Processor_CopyInSystemStack(MAINMEMORYSIZE-1,OS_address_base+1);
+                executingProcessID=NOPROCESS;
+                OperatingSystem_ShowTime(SHUTDOWN);
+                ComputerSystem_DebugMessage(99,SHUTDOWN,"The system will shut down now...\n");
+                return;
+            }
+        }
+
+Ejercicio 6:
+        int OperatingSystem_ObtainMainMemory(int processSize, int PID) { //V4-Ejercicio6
+            int sizeMejor; //Se guarda el tamaño de la mejor particion
+            int indiceMejor=-1; //Se guarda el indice de la mejor particion
+            //En este primer paso se comprueba que el tamaño del proceso sea inferior a la particion mayor
+            for (int i = 0; i < numberOfPartitions; i++)
+            {
+                if (partitionsTable[i].size > sizeMejor)
+                    sizeMejor= partitionsTable[i].size;
+            }
+            if (processSize>sizeMejor)
+                return TOOBIGPROCESS;
+            //En este segundo paso se elige la particion que mejor se ajuste al tamaño del proceso
+            sizeMejor=MAINMEMORYSIZE;
+            for (int i = 0; i < numberOfPartitions; i++)
+            {
+                if (partitionsTable[i].size >= processSize && partitionsTable[i].PID == NOPROCESS)
+                {
+                    if (partitionsTable[i].size < sizeMejor) //En caso de que sea igual no se hace nada porque tiene preferencia las direcciones de memoria más baja
+                    {
+                        sizeMejor = partitionsTable[i].size;
+                        indiceMejor = i;
+                    }
+                }
+            }
+            if (indiceMejor==-1)
+            {
+                return MEMORYFULL;
+            }
+            return indiceMejor;
+        }
+
+
+        void OperatingSystem_PCBInitialization(int PID, int partition, int processSize, int priority, int processPLIndex) {
+
+            processTable[PID].busy=1;
+            //processTable[PID].initialPhysicalAddress=initialPhysicalAddress;
+            processTable[PID].partition=partition;//V4-Ejercicio6
+            processTable[PID].processSize=processSize;
+            processTable[PID].copyOfSPRegister=partitionsTable[partition].initAddress+processSize;//V4-Ejercicio6
+            processTable[PID].state=NEW;
+            processTable[PID].priority=priority;
+            processTable[PID].programListIndex=processPLIndex;
+            // Daemons run in protected mode and MMU use real address
+            if (programList[processPLIndex]->type == DAEMONPROGRAM) {
+                processTable[PID].queueID=DAEMONSQUEUE;
+                processTable[PID].copyOfPCRegister=partitionsTable[partition].initAddress;//V4-Ejercicio6
+                processTable[PID].copyOfPSWRegister= ((unsigned int) 1) << EXECUTION_MODE_BIT;
+            } 
+            else {
+                processTable[PID].queueID=USERPROCESSQUEUE;
+                processTable[PID].copyOfPCRegister=0;
+                processTable[PID].copyOfPSWRegister=0;
+            }
+            processTable[PID].copyOfARegister=0;
+            processTable[PID].copyOfBRegister=0;
+            processTable[PID].copyOfAccumulatorRegister=0;
+            processTable[PID].whenToWakeUp=0;
+
+        }
+
+        Se cambió en todos los sitios initialPhisicalAdress por partitionsTable[processTable[PID].partition].initAddress.
+        Se muestra al final del OperatingSystem_CreateProcess() el mensaje indicado en el apartado c:
+            OperatingSystem_ShowTime(SYSMEM);
+	        ComputerSystem_DebugMessage(143,SYSMEM,partition,partitionsTable[partition].initAddress,partitionsTable[partition].size,PID,executableProgram->executableName);//V4-Ejercicio6c
+        Se añadieron condicionales en OperatingSystem_CreateProcess() para controlar lo que se devuelve en OperatingSystem_ObtainMainMemory(). En caso de error, se propagan los OperatingSystem_GetAndNotExtractMostPriorityReadyToRunProcess
+        Se controlan los errores propagados en OperatingSystem_CreateProcess() en OperatingSystem_LongTermScheduler():
+        int OperatingSystem_LongTermScheduler() {
+            int PID, i,
+                numberOfSuccessfullyCreatedProcesses=0;
+            while(OperatingSystem_IsThereANewProgram()==YES){
+                i=Heap_poll(arrivalTimeQueue,QUEUE_ARRIVAL,&numberOfProgramsInArrivalTimeQueue);
+                PID=OperatingSystem_CreateProcess(i);
+                if(PID==NOFREEENTRY){
+                    OperatingSystem_ShowTime(ERROR);
+                    ComputerSystem_DebugMessage(103,ERROR,programList[i]->executableName);
+                }else if(PID==PROGRAMDOESNOTEXIST){
+                    OperatingSystem_ShowTime(ERROR);
+                    ComputerSystem_DebugMessage(104,ERROR,programList[i]->executableName,"it does not exist");
+                }else if(PID==PROGRAMNOTVALID){
+                    OperatingSystem_ShowTime(ERROR);
+                    ComputerSystem_DebugMessage(104,ERROR,programList[i]->executableName,"invalid priority or size");
+                }else if(PID==TOOBIGPROCESS){
+                    OperatingSystem_ShowTime(ERROR);
+                    ComputerSystem_DebugMessage(144,ERROR,programList[i]->executableName); //V4-Ejercicio6d
+                    //ComputerSystem_DebugMessage(105,ERROR,programList[i]->executableName);
+                }else if(PID==MEMORYFULL){
+                    OperatingSystem_ShowTime(ERROR);
+                    ComputerSystem_DebugMessage(144,ERROR,programList[i]->executableName); //V4-Ejercicio6d
+                }
+                else{
+                    numberOfSuccessfullyCreatedProcesses++;
+                    if (programList[i]->type==USERPROGRAM) {
+                        numberOfNotTerminatedUserProcesses++;
+                    }
+                    // Move process to the ready state
+                    OperatingSystem_MoveToTheREADYState(PID);
+                }
+            }
+            // Return the number of succesfully created processes
+            return numberOfSuccessfullyCreatedProcesses;
+        }
+
+
+
+Ejercicio 7:
+    int OperatingSystem_CreateProcess(int indexOfExecutableProgram) { //V4-Ejercicio6
+        int PID;
+        int processSize;
+        int partition;
+        int priority;
+        FILE *programFile;
+        PROGRAMS_DATA *executableProgram=programList[indexOfExecutableProgram];
+        // Obtain a process ID
+        PID=OperatingSystem_ObtainAnEntryInTheProcessTable();
+        if(PID==NOFREEENTRY){
+            return NOFREEENTRY;
+        }
+        // Check if programFile exists
+        programFile=fopen(executableProgram->executableName, "r");
+
+        if(programFile==NULL){
+            return PROGRAMDOESNOTEXIST;
+        }
+        // Obtain the memory requirements of the program
+        processSize=OperatingSystem_ObtainProgramSize(programFile);	
+
+        // Obtain the priority for the process
+        priority=OperatingSystem_ObtainPriority(programFile);
+        
+        if(priority==PROGRAMNOTVALID || processSize==PROGRAMNOTVALID){
+            return PROGRAMNOTVALID;
+        }
+        // Obtain enough memory space
+        OperatingSystem_ShowTime(SYSMEM);
+        ComputerSystem_DebugMessage(142,SYSMEM,PID,executableProgram->executableName,processSize);//V4-Ejercicio6b
+        partition=OperatingSystem_ObtainMainMemory(processSize, PID);
+
+        if(partition==TOOBIGPROCESS){
+            return TOOBIGPROCESS;
+        }
+        else if(partition==MEMORYFULL){
+            return MEMORYFULL;
+        }
+        // Load program in the allocated memory
+        if(OperatingSystem_LoadProgram(programFile, partitionsTable[partition].initAddress, processSize)==TOOBIGPROCESS){
+            return TOOBIGPROCESS;
+        }
+        OperatingSystem_ShowPartitionTable("before allocating memory"); //V4-Ejercicio7
+        partitionsTable[partition].PID = PID;//V4-Ejercicio7
+        OperatingSystem_ShowTime(SYSMEM);
+        ComputerSystem_DebugMessage(143,SYSMEM,partition,partitionsTable[partition].initAddress,partitionsTable[partition].size,PID,executableProgram->executableName);//V4-Ejercicio6c
+        OperatingSystem_PCBInitialization(PID, partition, processSize, priority, indexOfExecutableProgram);
+        OperatingSystem_ShowTime(SYSPROC);
+        ComputerSystem_DebugMessage(112,SYSPROC,PID,statesNames[NEW], executableProgram->executableName);
+        OperatingSystem_ShowPartitionTable("after allocating memory");//V4-Ejercicio7
+        // Show message "Process [PID] created from program [executableName]\n"
+        //OperatingSystem_ShowTime(SYSPROC);
+        //ComputerSystem_DebugMessage(70,SYSPROC,PID, executableProgram->executableName);
+        return PID;
+    }
+
+Ejercicio 8:
+
+    void OperatingSystem_TerminateExecutingProcess() {
+        OperatingSystem_ShowTime(SYSPROC);
+        ComputerSystem_DebugMessage(110,SYSPROC,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName,statesNames[processTable[executingProcessID].state],statesNames[EXIT]);
+        processTable[executingProcessID].state=EXIT;
+        OperatingSystem_ShowPartitionTable("before releasing memory");//V4-Ejercicio8
+        OperatingSystem_ReleaseMainMemory();//V4-Ejercicio8
+        OperatingSystem_ShowPartitionTable("after releasing memory");//V4-Ejercicio8
+        if (programList[processTable[executingProcessID].programListIndex]->type==USERPROGRAM) {
+            // One more user process that has terminated
+            numberOfNotTerminatedUserProcesses--;
+        }
+        if (numberOfNotTerminatedUserProcesses==0 && numberOfProgramsInArrivalTimeQueue==0) {
+            // Simulation must finish, telling sipID to finish
+            OperatingSystem_ReadyToShutdown();
+            if (executingProcessID==sipID) {
+                // finishing sipID, change PC to address of OS HALT instruction
+                Processor_CopyInSystemStack(MAINMEMORYSIZE-1,OS_address_base+1);
+                executingProcessID=NOPROCESS;
+                OperatingSystem_ShowTime(SHUTDOWN);
+                ComputerSystem_DebugMessage(99,SHUTDOWN,"The system will shut down now...\n");
+                return; // Don't dispatch any process
+            }
+            
+        }
+        // Select the next process to execute (sipID if no more user processes)
+        int selectedProcess=OperatingSystem_ShortTermScheduler();
+
+        // Assign the processor to that process
+        OperatingSystem_Dispatch(selectedProcess);
+    }
+
+
+    void OperatingSystem_ReleaseMainMemory(){//V4-Ejercicio8
+        OperatingSystem_ShowTime(SYSMEM);
+        ComputerSystem_DebugMessage(145,SYSMEM,processTable[executingProcessID].partition,partitionsTable[processTable[executingProcessID].partition].initAddress,partitionsTable[processTable[executingProcessID].partition].size,executingProcessID,programList[processTable[executingProcessID].programListIndex]->executableName);
+        partitionsTable[processTable[executingProcessID].partition].PID=NOPROCESS;
+    }
