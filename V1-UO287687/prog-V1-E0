@@ -1,0 +1,11 @@
+40//Tamaño del programa en celdas de memorias
+1 //prioridad
+ADD 0 0
+WRITE 20
+INC -42
+ZJUMP 5//Termina
+INC 42
+MEMADD 2 20
+WRITE 20
+JUMP -5
+TRAP 3
